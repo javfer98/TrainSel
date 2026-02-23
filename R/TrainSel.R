@@ -173,6 +173,49 @@ TrainSelInner <-
         solnDBLMat=matrix(as.numeric(c()), ncol=0, nrow=0)
       }
       InitSol<-list(solnIntMat=solnIntMat,solnDBLMat=solnDBLMat)
+      
+      
+      
+      
+      
+      #check initial solutions do not contain values outside the candidates
+      #if there are int types:
+      for (col in 1:max(ncol(solnIntMat),ncol(solnDBLMat))) {
+        if (ncol(solnIntMat) != 0) {
+          solvec <- solnIntMat[,col]
+        }
+        if (ncol(solnDBLMat) != 0) {
+          solvec_dbl <- solnDBLMat[,col]
+        }
+        size0 <- 1
+        size0_dbl <- 1
+        for (typeIndex in 1:length(settypes)) {
+          currentSize <- setsizes[typeIndex]
+          currentSize <- currentSize+size0-1
+            
+          currentSize_dbl <- setsizes[typeIndex]
+          currentSize_dbl <- currentSize_dbl+size0_dbl-1
+            
+          if (settypes[typeIndex] != "DBL") {
+            currentsol <- solvec[size0:currentSize]
+            if (sum(currentsol %in% Candidates[[typeIndex]]) != length(currentsol)) {
+              stop("Initial solution contains values that are not among the candidates.")
+            }
+            size0 <- size0+currentSize
+          } else if (settypes[typeIndex] == "DBL") {
+            currentsol <- solvec_dbl[size0_dbl:currentSize_dbl]
+            if ( ( sum(currentsol > max(Candidates[[typeIndex]])) + 
+                   sum(currentsol < min(Candidates[[typeIndex]])) )  != 0) {
+              stop("Initial solution (double) contains values that are outside the boundaries determined in the \"Candidates\" argument.")
+            }
+            size0_dbl <- size0_dbl+currentSize_dbl
+          }
+        }
+      }
+      
+      
+      
+      
     }
 
     if (nStat==1){
@@ -873,4 +916,146 @@ TimeEstimation <- function(Data=NULL,
 
 }
 
+
+
+
+
+
+
+
+
+
+
+##########################MakeInitSol
+## Convenience function to build a valid InitSol object from one or more
+## known solutions, so they can be passed to TrainSel() as warm-start seeds.
+##
+## The GA engine (TrainSelC / TrainSelCMOO) expects InitSol to be a list with:
+##   $solnIntMat  : integer matrix, nrow = total integer variables, ncol = #solutions
+##   $solnDBLMat  : numeric  matrix, nrow = total DBL variables,     ncol = #solutions
+##
+## Each column is one complete solution. The C++ layer seeds the starting
+## population by sampling (with replacement) from these columns, so even a
+## single warm-start solution is sufficient to bias the whole initial population.
+##
+## Arguments
+## ---------
+## int_solutions : integer vector OR integer matrix.
+##   - If a vector  : one solution. Length must equal sum(setsizes[INT types]).
+##   - If a matrix  : each COLUMN is one solution.
+##   Pass NULL if there are no integer/ordered/boolean variables.
+##
+## dbl_solutions : numeric vector OR numeric matrix (same shape rules as above).
+##   Pass NULL if there are no DBL variables.
+##
+## settypes : character vector (same as passed to TrainSel). Used for validation.
+##
+## setsizes : integer vector (same as passed to TrainSel). Used for validation.
+##
+## Returns a list of class "TrainSel_InitSol" with elements $solnIntMat and
+## $solnDBLMat, ready to pass directly to the InitSol argument of TrainSel().
+MakeInitSol <- function(int_solutions = NULL,
+                        dbl_solutions = NULL,
+                        settypes      = NULL,
+                        setsizes      = NULL) {
+  
+  INT_TYPES <- c("BOOL", "UOS", "UOMS", "OS", "OMS")
+  DBL_TYPES <- c("DBL")
+  
+  as_col_matrix_int <- function(x) {
+    if (is.vector(x)) matrix(as.integer(x), ncol = 1)
+    else              matrix(as.integer(x), nrow = nrow(x), ncol = ncol(x))
+  }
+  
+  as_col_matrix_dbl <- function(x) {
+    if (is.vector(x)) matrix(as.numeric(x), ncol = 1)
+    else              matrix(as.numeric(x),  nrow = nrow(x), ncol = ncol(x))
+  }
+  
+  ## --- integer part ---
+  nINT_expected <- 0L
+  if (!is.null(settypes) && !is.null(setsizes)) {
+    nINT_expected <- sum(setsizes[settypes %in% INT_TYPES])
+  }
+  
+  if (is.null(int_solutions)) {
+    solnIntMat <- matrix(as.integer(c()), nrow = 0, ncol = 0)
+  } else {
+    solnIntMat <- as_col_matrix_int(int_solutions)
+    if (nINT_expected > 0 && nrow(solnIntMat) != nINT_expected) {
+      stop(paste0(
+        "int_solutions has ", nrow(solnIntMat), " rows but ",
+        nINT_expected, " integer variables are expected ",
+        "(sum of setsizes for BOOL/UOS/UOMS/OS/OMS types)."
+      ))
+    }
+    
+    
+    #check that there are no repeated values when not permitted
+    if ("UOS" %in% settypes | "OS" %in% settypes) {
+      for (col in 1:ncol(solnIntMat)) {
+        solvec <- solnIntMat[,col]
+        size0 <- 1
+        for (typeIndex in 1:length(settypes)) {
+          currentSize <- setsizes[typeIndex]
+          currentSize <- currentSize+size0-1
+          if (settypes[typeIndex] %in% c("UOS", "OS")) {
+            currentsol <- solvec[size0:currentSize]
+            if (length(currentsol) != length(unique(currentsol))) {
+              stop("No repetition is allowed in solutions for optimization of type UOS or OS")
+            }
+          }
+          if (settypes[typeIndex] != "DBL") {
+            size0 <- size0+currentSize
+          }
+        }
+      }
+    }
+  }
+  
+  ## --- double part ---
+  nDBL_expected <- 0L
+  if (!is.null(settypes) && !is.null(setsizes)) {
+    nDBL_expected <- sum(setsizes[settypes %in% DBL_TYPES])
+  }
+  
+  if (is.null(dbl_solutions)) {
+    solnDBLMat <- matrix(as.numeric(c()), nrow = 0, ncol = 0)
+  } else {
+    solnDBLMat <- as_col_matrix_dbl(dbl_solutions)
+    if (nDBL_expected > 0 && nrow(solnDBLMat) != nDBL_expected) {
+      stop(paste0(
+        "dbl_solutions has ", nrow(solnDBLMat), " rows but ",
+        nDBL_expected, " DBL variables are expected ",
+        "(sum of setsizes for DBL types)."
+      ))
+    }
+  }
+  
+  ## --- consistency: same number of solutions in both matrices ---
+  ns_int <- if (ncol(solnIntMat) > 0) ncol(solnIntMat) else NA_integer_
+  ns_dbl <- if (ncol(solnDBLMat) > 0) ncol(solnDBLMat) else NA_integer_
+  ns <- stats::na.omit(c(ns_int, ns_dbl))
+  if (length(ns) > 1 && length(unique(ns)) > 1) {
+    stop(paste0(
+      "int_solutions and dbl_solutions must have the same number of columns. ",
+      "Got ", ns_int, " integer solution(s) and ", ns_dbl, " DBL solution(s)."
+    ))
+  }
+  
+  structure(
+    list(solnIntMat = solnIntMat, solnDBLMat = solnDBLMat),
+    class = "TrainSel_InitSol"
+  )
+}
+
+
+print.TrainSel_InitSol <- function(x, ...) {
+  ns <- max(ncol(x$solnIntMat), ncol(x$solnDBLMat), 0)
+  cat("TrainSel_InitSol object\n")
+  cat("  Number of warm-start solutions :", ns, "\n")
+  cat("  Integer variables per solution  :", nrow(x$solnIntMat), "\n")
+  cat("  DBL variables per solution      :", nrow(x$solnDBLMat), "\n")
+  invisible(x)
+}
 

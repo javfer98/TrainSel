@@ -26,7 +26,7 @@ TrainSel(Data = NULL,
   \item{Candidates}{A list of vectors of integers. For 'DBL' type, the corresponding element in the list is a vector with the lower and upper bounds of the numeric variable of interest.}
 \item{setsizes}{A vector of integers. Number of samples from each of the elements in 'Candidates'.}
 \item{ntotal}{An integer value. The total number of unique integers in 'BestSoln_int' in the in the final solution. Default value is 0 which means no ntotal constraint is applied. When ntotal>0 and number of unique integers in the solution is not equal to ntotal, the Stat value is set to -1e_10*abs("number of unique integers in the solution"-ntotal).}
-\item{settypes}{Six options are available:"BOOL" Boelian, "UOS" unordered sample, "UOMS" unordered multi-set, "OS" ordered set, "OMS" ordered multi-set, "DBL" numeric variables.
+\item{settypes}{Character vector determining optimization types. Six options are available: "BOOL" Boolean, "UOS" unordered sample, "UOMS" unordered multi-set, "OS" ordered set, "OMS" ordered multi-set, "DBL" numeric variables.
 }
 \item{Stat}{Either NULL (in that case CDMin is used) or a user defined function that takes an integer vector or a vector of numeric variables and possibly a Data argument. The first input is used as the vector of integers, second input is the vector of numeric values and the last input if provided is used as Data. For univariate optimization this function returns a numeric value which we want to maximize with respect to the integer vector. Note that integer vector is considered to be the concatenation of the "OS", "UOS", "OMS", "UOMS" components provided in 'settypes', and the numeric vector corresponds to the concanetation of the 'DBL' components. There is also minimal support for muti-objective optimization (see details and examples).
 }
@@ -35,7 +35,7 @@ TrainSel(Data = NULL,
 }
 \item{control}{NULL or a TrainSel_Control object created by 'TrainSelControl' or 'SetControlDefault'.
 }
-\item{InitSol}{NULL or a list of initial solutions matrices for integer and/or double parts (for example: InitSol=list(solnIntMat=solnIntMat,solnDBLMat=solnDBLMat), or InitSol=list(solnIntMat=solnIntMat), or InitSol=list(solnDBLMat=solnDBLMat). In an initial solutions matrix, each column corresponds to a different solution)
+\item{InitSol}{NULL or a list of initial solutions matrices for integer and/or double parts. You can use the MakeInitSol() function to put the initial solutions in the correct format.)
 }
 \item{Username}{Integer containinig the username needed to upgrade from Demo to full version. To obtain username and password, please contact us at j.isidro@upm.es
 }
